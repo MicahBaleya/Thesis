@@ -1,0 +1,271 @@
+# QD Model
+
+%           Created by Micah Baleya
+
+x = x0;         % Features
+
+t = Input_Data; % Target
+#
+%% Determing the number of nodes in the hidden layer
+
+maxDeg = 20;    % Maximum number of nodes in the hidden layer
+
+nRepeats = 100; % Number of repeats for the simulations
+
+trainPerformance =zeros(maxDeg,1); % To keep track of Training performance
+
+valPerformance = zeros(maxDeg,1);  % To keep track of Validation performance
+
+% Looping through number of repeats
+
+for c = 1:nRepeats
+
+    numSamples = size(x, 2);  % Getting the total number of examples
+
+    % Define custom split ratios (i.e., 80% training, 20% validation)
+
+    trainRatio = 0.8;
+
+    valRatio = 0.2;
+    
+    % Calculate the number of samples for each split
+
+    numTrain = round(trainRatio * numSamples);
+
+    numVal = round(valRatio * numSamples);
+
+    % Create custom data indices for training and validation
+
+    idx = randperm(length(x0));
+
+    trainIndices = idx(1:numTrain);
+
+    valIndices = idx(numTrain + (1:numVal));
+   
+    % Split the data
+
+    XTrain = x(:,trainIndices);
+
+    YTrain = t(:,trainIndices);
+
+    XVal = x(:,valIndices);
+
+    YVal = t(:,valIndices);
+    
+    % Looping through the number of nodes
+
+    for i = 1:maxDeg
+
+        trainFcn = 'trainlm';  % Levenberg-Marquardt backpropagation
+
+        net = fitnet(i,trainFcn);
+
+        net.trainParam.showWindow = false;
+
+        net.performFcn = 'mse';  % Mean Squared Error
+       
+        net.divideFcn = 'divideind';  % Use custom indices
+
+        net.divideParam.trainInd = trainIndices;
+
+        net.divideParam.valInd = valIndices;
+
+        %net.divideParam.testInd = testIndices;
+        
+        net= train(net, x, t);
+
+        y_trXVal_p = net(XTrain);
+
+        y_val_p = net(XVal);
+
+        % Increament the performance each node count
+
+        trainPerformance(i) = trainPerformance(i) +  sqrt(perform(net,YTrain,y_trXVal_p));
+
+        valPerformance(i) = valPerformance(i) +  sqrt(perform(net,YVal,y_val_p)); 
+
+    end
+
+end
+#
+%% Calculating the Mean of the errors over the number of repeats the simulations were carried out
+
+RMSE_train = trainPerformance/nRepeats;
+
+RMSE_val = valPerformance/nRepeats;
+
+#
+%% Finding the minimum validation error and corresponding number of nodes
+
+[M,I] = min(RMSE_val)
+
+nodeNum = I;
+#
+%% Plots of the errors against number of nodes
+
+hold on
+
+xx = 1:maxDeg;
+
+plot(xx,RMSE_train,'MarkerEdgeColor','k','MarkerFaceColor',[0 1 0],'LineWidth',1)
+
+%plot(xx,RMSE_train,'MarkerEdgeColor','k','MarkerFaceColor',[1 0 0],'LineWidth',1)
+
+plot(xx,RMSE_val,'MarkerEdgeColor','k','MarkerFaceColor',[0 0 1],'LineWidth',1)
+
+%set(gca,'yscale','log')
+
+set(gca,'FontSize',14, 'FontName', 'Courier')
+
+xlabel('Number of neurons')
+
+ylabel("RMSE")
+
+grid on
+
+%title('Selection of number of neurons')
+
+hold off 
+
+legend('Training RMSE','Validation RMSE')
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Determining activation function
+activation_funs = {'tansig', 'logsig', 'purelin'};    % Maximum number of nodes in the hidden layer
+num_activation = length(activation_funs); % Number of activation functions
+nRepeats = 100; % Number of repeats for the simulations
+
+trainPerformance =zeros(num_activation,1); % To keep track of Training performance
+valPerformance = zeros(num_activation,1);  % To keep track of Validation performance
+
+% Looping through number of repeats
+for c = 1:nRepeats
+    numSamples = size(x, 2);  % Getting the total number of examples
+
+    % Define custom split ratios (i.e., 80% training, 20% validation)
+    trainRatio = 0.8;
+    valRatio = 0.2;
+    
+    % Calculate the number of samples for each split
+    numTrain = round(trainRatio * numSamples);
+    numVal = round(valRatio * numSamples);
+
+    % Create custom data indices for training and validation
+    idx = randperm(length(x0));
+    trainIndices = idx(1:numTrain);
+    valIndices = idx(numTrain + (1:numVal));
+   
+    % Split the data
+    XTrain = x(:,trainIndices);
+    YTrain = t(:,trainIndices);
+    XVal = x(:,valIndices);
+    YVal = t(:,valIndices);
+    
+    % Looping through the activation functions
+    for j = 1:num_activation
+        trainFcn = 'trainlm';  % Levenberg-Marquardt backpropagation.
+        net = fitnet(nodeNum,trainFcn);
+        net.trainParam.showWindow = false;
+        net.performFcn = 'mse';  % Mean Squared Error
+        net.layers{1}.transferFcn = activation_funs{j};
+       
+        net.divideFcn = 'divideind';  % Use custom indices
+        net.divideParam.trainInd = trainIndices;
+        net.divideParam.valInd = valIndices;
+        %net.divideParam.testInd = testIndices;
+        net = train(net, x, t);
+        y = net(x);
+        
+        y_trXVal_p = net(XTrain);
+        y_val_p = net(XVal);
+        % Increament the performance each node count
+        trainPerformance(j) = trainPerformance(j) +  sqrt(perform(net,YTrain,y_trXVal_p));
+        valPerformance(j) = valPerformance(j) +  sqrt(perform(net,YVal,y_val_p));
+    end
+end
+%% Calculating the Mean of the errors over the number of repeats the simulations were carried out
+RMSE_train = trainPerformance/nRepeats;
+RMSE_val = valPerformance/nRepeats;
+
+%% Plots of the errors against number of nodes
+[M,a] = min(RMSE_val)% Finding the minimum validation error and its index
+best_activation = activation_funs{a};
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Determining the training algorithm
+train_algo = {'trainlm', 'trainscg', 'trainrp', 'trainbfg','traingdm', 'traingda'};    % Maximum number of nodes in the hidden layer
+num_algo = length(train_algo); % Number of activation functions
+nRepeats = 100; % Number of repeats for the simulations
+
+trainPerformance =zeros(num_algo,1); % To keep track of Training performance
+valPerformance = zeros(num_algo,1);  % To keep track of Validation performance
+
+% Looping through number of repeats
+for c = 1:nRepeats
+    numSamples = size(x, 2);  % Getting the total number of examples
+
+    % Define custom split ratios (i.e., 80% training, 20% validation)
+    trainRatio = 0.8;
+    valRatio = 0.2;
+    
+    % Calculate the number of samples for each split
+    numTrain = round(trainRatio * numSamples);
+    numVal = round(valRatio * numSamples);
+
+    % Create custom data indices for training and validation
+    idx = randperm(length(x0));
+    trainIndices = idx(1:numTrain);
+    valIndices = idx(numTrain + (1:numVal));
+   
+    % Split the data
+    XTrain = x(:,trainIndices);
+    YTrain = t(:,trainIndices);
+    XVal = x(:,valIndices);
+    YVal = t(:,valIndices);
+    
+    % Looping through the activation functions
+    for l = 1:num_algo
+        trainFcn = train_algo{l}; 
+        net = fitnet(nodeNum,trainFcn);
+        net.trainParam.showWindow = false;
+        net.performFcn = 'mse';  % Mean Squared Error
+        net.layers{1}.transferFcn = best_activation;
+       
+        net.divideFcn = 'divideind';  % Use custom indices
+        net.divideParam.trainInd = trainIndices;
+        net.divideParam.valInd = valIndices;
+        %net.divideParam.testInd = testIndices;
+        net = train(net, x, t);
+        y = net(x);
+        
+        y_trXVal_p = net(XTrain);
+        y_val_p = net(XVal);
+        % Increament the performance each node count
+        trainPerformance(l) = trainPerformance(l) +  sqrt(perform(net,YTrain,y_trXVal_p));
+        valPerformance(l) = valPerformance(l) +  sqrt(perform(net,YVal,y_val_p));
+    end
+end
+%% Calculating the Mean of the errors over the number of repeats the simulations were carried out
+RMSE_train = trainPerformance/nRepeats;
+RMSE_val = valPerformance/nRepeats;
+
+%% Finding the best training algorithm
+[M,ii] = min(RMSE_val) 
+best_algo = train_algo{ii};
+
+%% Train the network with chosen hyperparameters
+
+% Configure the network
+net = fitnet(nodeNum,best_algo);
+net.trainParam.showWindow = false;
+net.performFcn = 'mse';  % Mean Squared Error
+net.layers{1}.transferFcn = best_activation;
+      
+net.divideFcn = 'dividerand';  % Use custom indices
+net.divideParam.trainRatio = 0.8;
+net.divideParam.valRatio = 0.2;
+%net.divideParam.testRatio = 0.2;
+
+% Train the network
+net = train(net, x, t);
