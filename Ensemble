@@ -1,0 +1,203 @@
+# Ensemble Generation 
+
+clc
+
+train_data = load('train.mat') % Load training data
+
+test_data = load('test.mat') % Load testing data
+
+
+xTrain = train_data(1:4,:); % Row 1 to 4 are features
+
+tTrain = train_data(5,:);   % Row 5 is the target
+
+xTest = test_data(1:4,:); % Row 1 to 4 are features
+
+tTest = test_data(5,:);   % Row 5 is the target
+
+#
+%% Split strategy on training data
+
+train_data = inputFet;
+
+indices = crossvalind('Kfold', size(train_data,2), 5); % 5 fold split, obions on the columns
+
+#
+%% Initialization
+
+sp = 1.1:0.2:2;
+
+ensemble = {};
+
+outPutAll = [];
+
+#
+%% Meta Learner training data generation
+
+for b = 1:length(sp)  
+
+    outPut = []; % To keep each base learner's predictions
+    
+    targetCrosV = []; % To keep the ground truth
+
+    % Looping through the splits
+    
+    for j = 1:k
+    
+        test_indices = (indices == 1); % Get indices for test set
+       
+        train_indices = ~test_indices;  % Training indices
+
+        test_indices = test_indices';
+        
+        train_indices = train_indices';
+
+        test_set = train_data(:,test_indices); % Extract test set
+        
+        train_set = train_data(:,train_indices); % Extract training set
+      
+        net = newrb(train_set(1:4,:),train_set(5,:),0,sp(b),10,500);   % Fit a model
+  
+        % Keep track of each base learner's prediction  
+        
+        outj = net(test_set(1:4,:));
+        
+        targetCrosV = [targetCrosV,test_set(5,:)];
+        
+        outPut = [outPut,outj];
+    end
+    
+outPutAll = [outPutAll;outPut];
+
+end
+
+#
+%% Training the base learner on the whole training set
+
+for i=1:length(sp)
+
+    ensemble{end+1} = newrb(xTrain,tTrain,0,sp(i),10,500);
+end
+
+#
+%% Training the meta learner
+
+net = fitnet(8,'trainlm'); % Example architecture with 10 hidden neurons
+
+net.divideParam.trainRatio = 0.85;
+
+net.divideParam.valRatio = 0.15;
+
+net.divideParam.testRatio = 0;
+
+net.trainParam.showWindow = false; % Disable training window
+
+net3 = train(net,outPutAll,targetCrosV);
+#
+
+%% Testing
+
+tic
+
+y_pred_all = cellfun(@(net) net(xTest), ensemble, 'UniformOutput', false);
+
+y_pred1 = cell2mat(y_pred_all');
+
+yF = net3(y_pred1);
+
+toc
+
+#
+%% Error Calculations Ensemble
+
+errorE = yF - tTest;
+
+MaxE_Ens = max(abs(errorE)) % Max error
+
+MAE_Ens = mean(abs(errorE)) % Mean absolute error
+
+RMSE_Ens  = sqrt(mean(errorE.^2)) % RMSE
+
+#
+%% One Big FFNN
+
+net4 = fitnet([50],'trainlm');
+
+net4.divideParam.trainRatio = 0.85;
+
+net4.divideParam.valRatio =  0.15;
+
+net4.trainParam.lr = 0.05;
+
+net4.trainParam.epochs = 800;
+
+net4.trainParam.showWindow = false; % Disable training window
+
+net4 = train(net4,xTrain,tTrain); % Train
+
+#
+%% Testing
+
+tic
+
+yy4 = net4(xTest);
+
+disp("Test time:")
+
+toc
+
+#
+%% Error Calculations
+
+err4 = yy4 - tTest;
+
+MaxE_big_FFNN = max(abs(err4)) % Max Error
+
+MAE_big_FFNN = mean(abs(err4)) % Mean absolute error
+
+RMSE_big_FFNN = sqrt(mean(err4.^2)) % RMSE
+
+#
+%% One Big RBFNN
+
+RBNN = newrb(xTrain,tTrain,0,0.2,50,500);
+
+#
+%% Testing
+
+tic
+
+yy5 = RBNN(xTest);
+
+disp("Test time:")
+toc
+
+#
+%% Error Calculations
+
+err5 = yy5 - tTest;
+
+MaxE_big_RBFNN = max(abs(err5)) % Max error
+
+MAE_big_RBFNN = mean(abs(err5)) % Mean absolute error
+
+RMSE_big_RBFNN = sqrt(mean(err5.^2)) % RMSE
+
+#
+%% Error Plots
+
+hold on
+
+plot(err4,'LineWidth',1.5,'Color','b','LineStyle','-');%,'Marker','*','MarkerSize',8);
+
+plot(err5,'LineWidth',1.5,'Color','y','LineStyle','-')%,'Marker','hexagram','MarkerSize',8);
+
+plot(errorE ,'LineWidth',1.5,'Color','black','LineStyle','-');%,'Marker','<','MarkerSize',8);
+
+ylabel('Error/mm')
+
+hold off
+
+legend('C_FFNN','C_RBFNN','Ensemble', 'Location','best')
+
+box on
